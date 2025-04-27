@@ -115,6 +115,12 @@ rnBench in the bin/ folder is the benchmark that takes in the following options:
 To run with per stats and tcmalloc, jemalloc, etc. run:
 perf stat ./build/bin/rnBench 2 100000 500000 no yes
 
+### Unit Tests (To Do -> use gtests later)
+cd unit_tests/
+./individual_module_tests.sh
+cd tests/
+Run the compiled UTa s needed (To do: only test_backend and test_backend_and_pool work atm.)
+
 ### Initial Evaluations
 rand. sizes of 16, 64, 128, and 256 bytes | 100k vailable slots to allocate/free and 500k iterations.
 
