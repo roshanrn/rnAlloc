@@ -1,10 +1,13 @@
-#include "../rn_backend.h"
-#include "../rn_pool.h"
+#include "../src/rn_backend.h"
+#include "../src/rn_pool.h"
 #include <iostream>
 #include <map>
 #include <memory>
 
 #define M 1 * 1024 * 1024
+
+#define NUM_SIZES 2
+int SIZES[NUM_SIZES] = {16, 128};
 
 int main(int argc, char **argv) {
 
@@ -24,9 +27,11 @@ int main(int argc, char **argv) {
     for (int i = 0; i < 100; i++) {
         int op = rand() % 2;
         int idx = rand() % 10;
+		int sIdx = rand() % NUM_SIZES;
+
 
         if (op == 0 && testArr[idx] == nullptr) {
-            testArr[idx] = rnPool.poolAllocate(128);
+            testArr[idx] = rnPool.poolAllocate(SIZES[sIdx]);
             allocStats[idx]++;
         } else if (op == 1 && testArr[idx] != nullptr) {
             rnPool.poolRelease(testArr[idx]);
