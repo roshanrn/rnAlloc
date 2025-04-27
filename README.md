@@ -101,9 +101,9 @@ Setup 1:
 Setup 2: To Do -> Run on a Server? **Don't have a setup**
 
 ### Build Directions
-mkdir build
-cd build && cmake ..
-make
+mkdir build <br>
+cd build && cmake .. <br>
+make <br>
 
 rnBench in the bin/ folder is the benchmark that takes in the following options:
 1. num_threads
