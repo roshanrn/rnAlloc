@@ -112,7 +112,10 @@ rnBench in the bin/ folder is the benchmark that takes in the following options:
 4. yes/no for rnAlloc
 5. yes/no for malloc
 
-To run with per stats and tcmalloc, jemalloc, etc. run:
+To run with tcmalloc for example, run:
+LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libtcmalloc.so ./build/bin/rnBench 4 100000 500000 yes yno
+
+To run with perf stats run:
 perf stat ./build/bin/rnBench 2 100000 500000 no yes
 
 ### Unit Tests (To Do -> use gtests later)
