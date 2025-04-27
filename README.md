@@ -101,6 +101,18 @@ Setup 2:
 3. Linux kernel version: 
 4. Ubuntu version: 
 
+### Build Directions
+mkdir build
+cd build && cmake ..
+make
+
+rnBench in the bin/ folder is the benchmark that takes in the following options:
+1. num_threads
+2. num_slots
+3. num_iters
+4. yes/no for rnAlloc
+5. yes/no for malloc
+
 ### Evaluations
 rand. sizes of 16, 64, 128, and 256 bytes | 100k vailable slots to allocate/free and 500k iterations.
 **Setup 1**
