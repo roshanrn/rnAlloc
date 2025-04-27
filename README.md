@@ -23,7 +23,7 @@ G2: Efficient space utilization of the reserved memory. <br>
 G3: Be highly scalable for larger programs with multiple threads. <br>
 
 ### Designing RnAlloc:
-Note: Given my basic understanding of tcmalloc's design having used in a past project, my design borrows principles from it [].
+Note: Given my basic understanding of tcmalloc's design having used in a past project, my design borrows principles from it [3].
 
 1. RnAllocator:
    The RnAllocator maintains a reference to the perCPU or perThread RnPool (as seen in the Figure 1). The rnAlloc and rnFree calls interface first with the RnAllocator modulle. The RnAllocator simply acts an an indirection layer and based on the cpu_id or thread_id calls the corresponding RnPool. The decision to keep perThread or preCPU structures helps in minimizing the need for locks and in fact almost entirely eliminates it in this layer. For example, keeping a perThread RnPool means that each thread has its own pool of memory to allocate from or free to. However, using a perThread RnPool runs into scalability issues especially for modern applications on systems that end up spawning 100s of threads. Specifically, maintaining a perThread RnPool means that the memory footprint is directly proportional to the number of threads active. <br>
@@ -33,7 +33,7 @@ Note: Given my basic understanding of tcmalloc's design having used in a past pr
 
    (View in Dark mode or download the .png separately))
    <figure>
-      <img src="rnAlloc_tp.png" alt="rnAlloc" style="display: block; margin: 0 auto;">
+      <img src="rnAlloc_design_latest.png" alt="rnAlloc" style="display: block; margin: 0 auto;">
       <figcaption style="text-align: center;"> Figure 1. RnAlloc design</figcaption>
    </figure>
 
@@ -54,7 +54,7 @@ Note: Given my basic understanding of tcmalloc's design having used in a past pr
 
    The RnBackend maintains metadata of which size bin its memory is being allocated to from the global list.
 
-   (Not implemented) The mmap() call can reserves pages directly from 2MB hugepages if available via the HugeTLBfs. This is because hugepages help in lowering TLB misses by design due to the lower PTEs. One could also try to use larger sizes hugepages like 1GB or other values supported by the platform that RnAlloc runs on. 
+   (Not implemented) The mmap() call can reserves pages directly from 2MB hugepages if available via the HugeTLBfs [1]. This is because hugepages help in lowering TLB misses by design due to the lower PTEs. One could also try to use larger sizes hugepages like 1GB or other values supported by the platform that RnAlloc runs on. 
    > **_Observation:_**  **This design element helps improve performance by reducing TLB misses**
 
    (Not implemented) Background Thread - Garbage collector of sorts: This thread keeps a check on memory allocated to each RnPool and RnBin and keeps a check on the best tradeoff between space utilization and latency of memory allocation and free calls.
@@ -74,7 +74,7 @@ RnBench randomly issues alloc or free calls, picks random slots to alloc or free
 KPIs collected by RnBench natively are:
 1. Allocation time/latency
 
-(not implemented) Other relevant KPIs that can be collected via perf/sar/other tools 
+(not implemented) Other relevant KPIs that can be collected via perf [2] or other tools: 
 2. Memory overhead
 3. Cache Misses
 4. Instructions executed per CPU
@@ -95,11 +95,7 @@ Setup 1:
 3. Linux kernel version: 6.11.0-9-generic
 4. Ubuntu version: 24.10
 
-Setup 2: 
-1. CPUs:
-2. RAM: 
-3. Linux kernel version: 
-4. Ubuntu version: 
+Setup 2: To Do -> Run on a Server? **Don't have a setup**
 
 ### Build Directions
 mkdir build
@@ -113,11 +109,14 @@ rnBench in the bin/ folder is the benchmark that takes in the following options:
 4. yes/no for rnAlloc
 5. yes/no for malloc
 
-### Evaluations
+To run with per stats and tcmalloc, jemalloc, etc. run:
+perf stat ./build/bin/rnBench 2 100000 500000 no yes
+
+### Initial Evaluations
 rand. sizes of 16, 64, 128, and 256 bytes | 100k vailable slots to allocate/free and 500k iterations.
-**Setup 1**
+
 #### I. Allocations Only:
-Time (ms) - Mean ± σ
+Time (ms) - Mean ± σ on **Setup 1**
 | Lib    | 1 thread |  4 threads |    8 threads  | 16 threads |    
 | :----: | :----: | :----: | :----: | :----: |
 | tcmalloc |  89    | 213.75 ± 26.29    | 466.25 ± 38.44 | 952.5 ± 204.73  |
@@ -125,10 +124,8 @@ Time (ms) - Mean ± σ
 | jemalloc |  85    | 121.75 ± 37.1     | 461.1 ± 23.79  | 882.81 ± 36.22  |
 | rnAlloc  |  120   | 308.25 ± 13.12    | 671.25 ± 74.89 | 1460.68 ± 41.96 |
 
-
 #### II. Combinations of Random Allocations and Frees:
-
-Time (ms) - Mean ± σ
+Time (ms) - Mean ± σ on **Setup 1**
 | Lib    | 1 thread |  4 threads |    8 threads  | 16 threads |    
 | :----: | :----: | :----: | :----: | :----: |
 | tcmalloc |   87   | 193 ± 46.98     | 534.12 ± 52.24 | 1057 ± 142.87    |
@@ -136,26 +133,50 @@ Time (ms) - Mean ± σ
 | jemalloc |  70    |  144.75 ± 40.35 | 433.35 ± 15.45 | 888.25 ± 44.89   |
 | rnAlloc  | 190    |  452.25 ± 27.91 | 1005 ± 101.8   | 2486.62 ± 352.65 |
 
-**Setup 2:**
-#### I. Allocations Only:
-Time (ms) - Mean ± σ
-| Lib    | 1 thread |  4 threads |    8 threads  | 16 threads |  32 threads |  
-| :----: | :----: | :----: | :----: | :----: | :----: |
-| tcmalloc |      |     |  |   |    |
-| glibc    |     |        |     | |  |
-| jemalloc |      |      |   |   |   |
-| rnAlloc  |     |     |  |  |    |
+Example output of per stat with rnAlloc (perf stat ./build/bin/rnBench 2 100000 500000 yes no)
+ Performance counter stats for './build/bin/rnBench 2 100000 500000 yes no':
+
+            549.52 msec task-clock                       #    1.885 CPUs utilized
+                35      context-switches                 #   63.692 /sec
+                 1      cpu-migrations                   #    1.820 /sec
+              6259      page-faults                      #   11.390 K/sec
+        1683867743      cycles                           #    3.064 GHz
+         469947048      stalled-cycles-frontend          #   27.91% frontend cycles idle
+        2826916132      instructions                     #    1.68  insn per cycle
+                                                  #    0.17  stalled cycles per insn
+         447344092      branches                         #  814.063 M/sec
+           4745211      branch-misses                    #    1.06% of all branches
+
+       0.291544612 seconds time elapsed
+
+       0.511895000 seconds user
+       0.035800000 seconds sys
+
+Example output of perf stat with glibc (perf stat ./build/bin/rnBench 2 100000 500000 no yes)
+Performance counter stats for './build/bin/rnBench 2 100000 500000 no yes':
+
+            294.70 msec task-clock                       #    1.893 CPUs utilized
+                15      context-switches                 #   50.899 /sec
+                 0      cpu-migrations                   #    0.000 /sec
+              8992      page-faults                      #   30.512 K/sec
+         923363210      cycles                           #    3.133 GHz
+          93099353      stalled-cycles-frontend          #   10.08% frontend cycles idle
+         970275164      instructions                     #    1.05  insn per cycle
+                                                  #    0.10  stalled cycles per insn
+         134034267      branches                         #  454.816 M/sec
+           5145828      branch-misses                    #    3.84% of all branches
+
+       0.155656629 seconds time elapsed
+
+       0.243284000 seconds user
+       0.050850000 seconds sys
 
 
-#### II. Combinations of Random Allocations and Frees:
 
-Time (ms) - Mean ± σ
-| Lib    | 1 thread |  4 threads |    8 threads  | 16 threads |  32 threads |  
-| :----: | :----: | :----: | :----: | :----: | :----: |
-| tcmalloc |      |     |  |   |    |
-| glibc    |     |        |     | |  |
-| jemalloc |      |      |   |   |   |
-| rnAlloc  |     |     |  |  |    |
-
-
+## References 
+[1] https://docs.kernel.org/admin-guide/mm/hugetlbpage.html
+[2] https://www.brendangregg.com/perf.html
+[3] https://github.com/google/tcmalloc
+[4] https://github.com/jemalloc/jemalloc
+[5] https://www.gnu.org/software/libc/
 
