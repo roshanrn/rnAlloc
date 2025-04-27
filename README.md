@@ -55,12 +55,16 @@ Note: Given my basic understanding of tcmalloc's design having used in a past pr
 4. RnBackend:
    The RnBackend is a global list of memory obtained via mmap(). Currently the mmap() happens on init time to allocate a large slab of memory based on a fixed size. To extend this to make a more generic design, the RnBackend can request more memory via mmap() as and when the global list runs low on available memory to allocate to the RnPools. The global list uses a lock to make sure that there us synchronized allocation of memory if multiple RnPools request memory at the same time.
 
-   The RnBackend maintains metadata of which size bin its memory is being allocated to from the global list.
+   The RnBackend maintains metadata of which size bin its memory is being allocated to from the global list. (check 4. Metadata Maintained below)
 
    (Not implemented) The mmap() call can reserves pages directly from 2MB hugepages if available via the HugeTLBfs [1]. This is because hugepages help in lowering TLB misses by design due to the lower PTEs. One could also try to use larger sizes hugepages like 1GB or other values supported by the platform that RnAlloc runs on. 
    > **_Observation:_**  **This design element helps improve performance by reducing TLB misses**
 
    (Not implemented) Background Thread - Garbage collector of sorts: This thread keeps a check on memory allocated to each RnPool and RnBin and keeps a check on the best tradeoff between space utilization and latency of memory allocation and free calls.
+
+5. Metadata Maintained:
+   The metadata maintained by RnAlloc is simply a map where the key is the address range and value is the binSize. This way even if a CPU different from the one that allocated the memory tries to free it, the metadata map helps obtain the binsize and letes the CPU add that memory back to its corresponding RnBin. (To Do - use a tree for optimal performance and space utilization - maybe a radix tree?)
+   > **_Note:_**  **To prove that cross-cpu free and subsequent allocation works fine there is a UT to demonstrate this. Check unit_tests/test_cross_cpu_free.cpp - It has explanation in comments and running it after compilation showcases that cross cpu free actually works fine.**
 
 ### Limitations/Deficiencies of the current minimal implementation:
 The following are currently not implemented / can be optimized in this minimal working implementation:
@@ -91,6 +95,14 @@ RnBench supports the following currently:
 | Pattern: Seq. Rand., etc. | Y  |  N/A  |
 | Memory Allocators | RnAlloc - Y <br> glibc - Y <br> tcmalloc - Y <br> jemalloc - Y |  |
 
+Currently limitations of running rnBench: 
+1. Due to low system capabilties available (2 CPUs, 4 GB RAM - using a Digitial Ocean VM), RnBench hasn't been fully tested and verified for high threads + high slots + high iteraations configurations (>16 threads).
+
+Archive of fixes:
+Fix 1. Using thread::id::get_id() for comparison is not recommended in c++ - requires a better method in rn_allocator.cpp. Fixed - setting thread name and using that now. 
+Fix 2. Remove hardcodings: Calculate the mem required based on slots and threads and compare against free memory before starting benchmark. Fixed, adding calculation - quite conservative estimation.
+
+
 ### Setup
 Setup 1: 
 1. vCPUs: 2
@@ -98,12 +110,12 @@ Setup 1:
 3. Linux kernel version: 6.11.0-9-generic
 4. Ubuntu version: 24.10
 
-Setup 2: To Do -> Run on a Server? **Don't have a setup**
+Setup 2: To Do -> Run on a Server? **Don't have a setup unfortunately, so I haven't tested**
 
 ### Build Directions
-mkdir build <br>
-cd build && cmake .. <br>
-make <br>
+mkdir build && && cd build && cmake .. && make && cd - <br>
+
+Run with: ./build/bin/rnBench
 
 rnBench in the bin/ folder is the benchmark that takes in the following options:
 1. num_threads
@@ -122,10 +134,35 @@ perf stat ./build/bin/rnBench 2 100000 500000 no yes
 cd unit_tests/ <br>
 ./individual_module_tests.sh <br>
 cd tests/ <br>
-Run the compiled UTa s needed (To do: only test_backend and test_backend_and_pool work atm.)
+Run the compiled UTs as needed: Currently test_multi and test_all are broken 
+
+### Checking memory errors and leaks with valgrind
+````
+```
+root@roshan-devel:/home/roshan/rnAlloc# valgrind --tool=memcheck --leak-check=yes ./rnBench
+==451118== Memcheck, a memory error detector
+==451118== Copyright (C) 2002-2024, and GNU GPL'd, by Julian Seward et al.
+==451118== Using Valgrind-3.23.0 and LibVEX; rerun with -h for copyright info
+==451118== Command: ./rnBench
+==451118==
+==451118==
+==451118== HEAP SUMMARY:
+==451118==     in use at exit: 0 bytes in 0 blocks
+==451118==   total heap usage: 1,634,112 allocs, 1,634,112 frees, 146,553,640 bytes allocated
+==451118==
+==451118== All heap blocks were freed -- no leaks are possible
+==451118==
+==451118== For lists of detected and suppressed errors, rerun with: -s
+==451118== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)
+```
+````
+
 
 ### Initial Evaluations
-rand. sizes of 16, 64, 128, and 256 bytes | 100k vailable slots to allocate/free and 500k iterations.
+Note: RnBench has not been testes with more than 500k iterations due to the above mentioned limitations.
+
+Config used: Rand. sizes of 16, 64, 128, and 256 bytes | 100k available slots to allocate/free and 500k iterations. (Note that these results are with the code as on April 27. Fresh results to follow.)
+
 
 #### I. Allocations Only:
 Time (ms) - Mean ± σ on **Setup 1**
@@ -182,6 +219,8 @@ Performance counter stats for './build/bin/rnBench 2 100000 500000 no yes':
 
        0.243284000 seconds user
        0.050850000 seconds sys
+
+
 
 
 

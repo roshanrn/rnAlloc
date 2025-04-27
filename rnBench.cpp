@@ -1,29 +1,25 @@
 #include "src/rn_allocator.h"
 #include <cassert>
+#include <cerrno>
 #include <chrono>
+#include <cstring>
 #include <iostream>
 #include <random>
+#include <sys/sysinfo.h>
 #include <thread>
 #include <vector>
 
-#define NUM_SLOTS 100000
-#define NUM_ITERS 500000
 #define NUM_SIZES 4
 #define NUM_OPS 2
 #define NUM_THREADS 4
 
-// int ALLOC_SIZES[NUM_SIZES]{16, 128, 1024};
-// int ALLOC_SIZES[NUM_SIZES]{128};
 int ALLOC_SIZES[NUM_SIZES]{16, 64, 128, 256};
-
-// int allocStats[NUM_THREADS][NUM_SIZES][NUM_SLOTS];
-// int freeStats[NUM_THREADS][NUM_SIZES][NUM_SLOTS];
 
 void per_thread_bench(RnAllocator *rnAllocator, int tId, int num_slots,
                       int num_iters) {
     std::random_device rd;
     std::mt19937 gen(rd());
-    std::uniform_int_distribution<> idxDistrib(0, NUM_SLOTS - 1);
+    std::uniform_int_distribution<> idxDistrib(0, num_slots - 1);
     std::uniform_int_distribution<> opDistrib(0, NUM_OPS - 1);
     std::uniform_int_distribution<> sizeDistrib(0, NUM_SIZES - 1);
 
@@ -59,14 +55,12 @@ void per_thread_bench(RnAllocator *rnAllocator, int tId, int num_slots,
                 allocated_memory[sizeIdx][index] =
                     rnAllocator->rnAllocate(ALLOC_SIZES[sizeIdx]);
             }
-            // allocStats[tId][sizeIdx][index]++;
         } else if (allocated_memory[sizeIdx][index] != nullptr) {
             if (rnAllocator == nullptr) {
                 free(allocated_memory[sizeIdx][index]);
             } else {
                 rnAllocator->rnDelete(allocated_memory[sizeIdx][index]);
             }
-            // freeStats[tId][sizeIdx][index]++;
             allocated_memory[sizeIdx][index] = nullptr;
         }
     }
@@ -78,14 +72,13 @@ void per_thread_bench(RnAllocator *rnAllocator, int tId, int num_slots,
 
     // Clean up any remaining allocated memory
     for (int i = 0; i < NUM_SIZES; i++) {
-        for (int j = 0; j < NUM_SLOTS; j++) {
+        for (int j = 0; j < num_slots; j++) {
             if (allocated_memory[i][j] != nullptr) {
                 if (rnAllocator == nullptr) {
                     free(allocated_memory[i][j]);
                 } else {
                     rnAllocator->rnDelete(allocated_memory[i][j]);
                 }
-                // freeStats[tId][i][j]++;
             }
         }
     }
@@ -118,41 +111,13 @@ void run_bench(int num_threads, int num_slots, int num_iters,
 
     std::cout << "Total Time with " << num_threads
               << " threads: " << total_duration << " ms" << std::endl;
-
-    /*
-    std::cout << " ****** Alloc Stats ****** " << std::endl;
-    for (int i = 0; i < NUM_THREADS; i++) {
-        std::cout << " ## THREAD " << i << " Alloc ##" << std::endl;
-        for (int j = 0; j < NUM_SLOTS; j++) {
-            if (allocStats[i][0][j] == 0) {
-                continue;
-            }
-            std::cout << " Idx : " << j << " , Cnt: " << allocStats[i][0][j]
-                      << std::endl;
-        }
-    }
-
-    std::cout << " ****** Free Stats ****** " << std::endl;
-    for (int i = 0; i < NUM_THREADS; i++) {
-        std::cout << " ## THREAD " << i << " Free ##" << std::endl;
-        for (int j = 0; j < NUM_SLOTS; j++) {
-            if (freeStats[i][0][j] == 0) {
-                continue;
-            }
-            std::cout << " Idx : " << j << " , Cnt: " << freeStats[i][0][j]
-                      << std::endl;
-        }
-    }
-    */
 }
 
 int main(int argc, char **argv) {
     bool runRnAlloc(false), runMalloc(false);
-    int num_threads = NUM_THREADS, num_slots = NUM_SLOTS, num_iters = NUM_ITERS;
+    int num_threads = NUM_THREADS, num_slots = 100000, num_iters = 500000;
     std::cout << " Number of arguments = " << argc << std::endl;
     if (argc == 6) {
-        assert(num_threads <= 16);
-        assert(num_slots <= 500000);
         num_threads = std::atoi(argv[1]);
         num_slots = std::atoi(argv[2]);
         num_iters = std::atoi(argv[3]);
@@ -170,15 +135,44 @@ int main(int argc, char **argv) {
     } else {
         runRnAlloc = true;
         runMalloc = true;
-        std::cout << "Using defaults of: NumThreads = " << NUM_THREADS
-                  << " and NumSlots = " << NUM_SLOTS
-                  << " and NumIteratios = " << NUM_ITERS
+        std::cout << "Using defaults of: NumThreads = " << num_threads
+                  << " and NumSlots = " << num_slots
+                  << " and NumIteratios = " << num_iters
                   << " and running both rnAlloc and linked allocator"
                   << std::endl;
     }
 
     if (runRnAlloc) {
-        RnAllocator rnAllocator(768 * 1024 * 1024, 10 * 1024 * 1024);
+        size_t total_mem_estimate, per_bin_estimate = 0, sum_sizes = 0;
+        for (int i = 0; i < NUM_SIZES; i++) {
+            sum_sizes += ALLOC_SIZES[i];
+        }
+        struct sysinfo ramInfo;
+        if (sysinfo(&ramInfo) != 0) {
+            std::cerr << "Unable to get free RAM info " << std::strerror(errno)
+                      << std::endl;
+            return 1;
+        }
+        size_t free_memory = ramInfo.freeram;
+        total_mem_estimate = num_threads * num_slots * sum_sizes;
+        //std::cout << "Free Memory = " << free_memory
+        //          << " Mem Estimate = " << total_mem_estimate << std::endl;
+        total_mem_estimate =
+            (total_mem_estimate +4096 * 4096 - 1) / (4096 * 4096);
+        total_mem_estimate = total_mem_estimate * 4096 * 4096;
+
+        //std::cout << " Mem Estimate = " << total_mem_estimate << std::endl;
+
+        if (free_memory / 2 < total_mem_estimate) {
+            std::cout
+                << " Not enough free memory, reduce slots or threads or both"
+                << " Free mem = " << free_memory << std::endl;
+            return 1;
+        }
+
+        RnAllocator rnAllocator(total_mem_estimate,
+                                total_mem_estimate / (NUM_SIZES * num_threads));
+        // RnAllocator rnAllocator(768 * 1024 * 1024, 10 * 1024 * 1024);
         run_bench(num_threads, num_slots, num_iters, &rnAllocator);
     }
 
