@@ -119,9 +119,9 @@ To run with perf stats run:
 perf stat ./build/bin/rnBench 2 100000 500000 no yes
 
 ### Unit Tests (To Do -> use gtests later)
-cd unit_tests/
-./individual_module_tests.sh
-cd tests/
+cd unit_tests/ <br>
+./individual_module_tests.sh <br>
+cd tests/ <br>
 Run the compiled UTa s needed (To do: only test_backend and test_backend_and_pool work atm.)
 
 ### Initial Evaluations
