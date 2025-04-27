@@ -28,6 +28,8 @@ Note: Given my basic understanding of tcmalloc's design having used in a past pr
 1. RnAllocator:
    The RnAllocator maintains a reference to the perCPU or perThread RnPool (as seen in the Figure 1). The rnAlloc and rnFree calls interface first with the RnAllocator modulle. The RnAllocator simply acts an an indirection layer and based on the cpu_id or thread_id calls the corresponding RnPool. The decision to keep perThread or preCPU structures helps in minimizing the need for locks and in fact almost entirely eliminates it in this layer. For example, keeping a perThread RnPool means that each thread has its own pool of memory to allocate from or free to. However, using a perThread RnPool runs into scalability issues especially for modern applications on systems that end up spawning 100s of threads. Specifically, maintaining a perThread RnPool means that the memory footprint is directly proportional to the number of threads active. <br>
 
+   > **_Note:_** **For large sizes, once could directly obtain memory via the RnBackend instead of relying on the RnPool and RnBins.** 
+
    An easy way to mitigate this is to maintain a perCPU RnPool. This still provides a fast-path for allocation and freeing. This way, it still remains performant and reduces the overhead of maintaining RnPools because there are a fixed number of CPUs per system. <br>
    > **_Observation:_**  **This design element caters to G1 and G3**
 
@@ -37,11 +39,12 @@ Note: Given my basic understanding of tcmalloc's design having used in a past pr
       <figcaption style="text-align: center;"> Figure 1. RnAlloc design</figcaption>
    </figure>
 
-2. RnPool:
+1. RnPool:
    The RnPool is a perCPU or perThread pool of memory that can enables a fast-path for allocation and free. The RnPool internally maintains multiple size bins called RnBins. RnBins are similar to size classes in tcmalloc.
    The RnBin allocates memory from the RnBackend in fixed sizes. The RnBin uses a list to track the addresses allocated from its memory available. If the RnBin runs out of memory, it requests the RnBacked for more memory.
    > **_Observation:_**  **By keeping memory in RnBins to provide a fast lockless thread safe allocation path, RnAlloc can achieve low latency.**
    > **_Tradeoff:_**  **Latency vs. Mem Utilization: Deciding how much memory to keep per bin vs the amount used by each thread for a specific bin is a tradeoff in efficient space utilization vs speed of allocation.**
+   > **_Tradeoff:_**  **How many bins are needed? For example tcmalloc uses 86-90 bins based on the page size used. This is to be picked to tradeoof performance and space wastage [6].
 
    (not implemented) RnPool Memory Borrow: The RnBin can borrow memory from other RnBins (inter-bin) and RnPools and borrow memory from other RnPools (inter-pool) to meet bin size access asymmetry. The RnBackend's background thread also requests RnBins and RnPools to release any unused, excess memory to re-distribute to other RnBins and RnPools.
    > **_Tradeoff:_**  **Complexity vs Space Efficiency: While the borrow concept seems complex, it caters various simple scenarios like an application exiting and threads no longer needing an RnPool. Similarly, during low CPU utilizations, it would make sense to release memory to the RnBackemd and uninit/keep minimal RnPools.**
@@ -174,9 +177,10 @@ Performance counter stats for './build/bin/rnBench 2 100000 500000 no yes':
 
 
 ## References 
-[1] https://docs.kernel.org/admin-guide/mm/hugetlbpage.html
-[2] https://www.brendangregg.com/perf.html
-[3] https://github.com/google/tcmalloc
-[4] https://github.com/jemalloc/jemalloc
-[5] https://www.gnu.org/software/libc/
+[1] https://docs.kernel.org/admin-guide/mm/hugetlbpage.html <br>
+[2] https://www.brendangregg.com/perf.html <br>
+[3] https://github.com/google/tcmalloc <br>
+[4] https://github.com/jemalloc/jemalloc <br> 
+[5] https://www.gnu.org/software/libc/ <br> 
+[6] https://www.jamesgolick.com/2013/5/19/how-tcmalloc-works.html 
 
