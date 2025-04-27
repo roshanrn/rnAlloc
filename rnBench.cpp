@@ -61,15 +61,13 @@ void per_thread_bench(RnAllocator *rnAllocator, int tId, int num_slots,
             }
             // allocStats[tId][sizeIdx][index]++;
         } else if (allocated_memory[sizeIdx][index] != nullptr) {
-            /*
             if (rnAllocator == nullptr) {
                 free(allocated_memory[sizeIdx][index]);
             } else {
                 rnAllocator->rnDelete(allocated_memory[sizeIdx][index]);
             }
-            //freeStats[tId][sizeIdx][index]++;
+            // freeStats[tId][sizeIdx][index]++;
             allocated_memory[sizeIdx][index] = nullptr;
-            */
         }
     }
 
@@ -149,10 +147,10 @@ void run_bench(int num_threads, int num_slots, int num_iters,
 }
 
 int main(int argc, char **argv) {
-    bool runRnAlloc(false);
+    bool runRnAlloc(false), runMalloc(false);
     int num_threads = NUM_THREADS, num_slots = NUM_SLOTS, num_iters = NUM_ITERS;
     std::cout << " Number of arguments = " << argc << std::endl;
-    if (argc == 5) {
+    if (argc == 6) {
         assert(num_threads <= 16);
         assert(num_slots <= 500000);
         num_threads = std::atoi(argv[1]);
@@ -161,6 +159,9 @@ int main(int argc, char **argv) {
         if (std::string(argv[4]) == "yes") {
             runRnAlloc = true;
         }
+        if (std::string(argv[5]) == "yes") {
+            runMalloc = true;
+        }
         std::cout << "Using NumThreads = " << num_threads
                   << " and NumSlots = " << num_slots
                   << " and NumIteratios = " << num_iters
@@ -168,6 +169,7 @@ int main(int argc, char **argv) {
                   << std::endl;
     } else {
         runRnAlloc = true;
+        runMalloc = true;
         std::cout << "Using defaults of: NumThreads = " << NUM_THREADS
                   << " and NumSlots = " << NUM_SLOTS
                   << " and NumIteratios = " << NUM_ITERS
@@ -180,5 +182,7 @@ int main(int argc, char **argv) {
         run_bench(num_threads, num_slots, num_iters, &rnAllocator);
     }
 
-    run_bench(num_threads, num_slots, num_iters, nullptr);
+    if (runMalloc) {
+        run_bench(num_threads, num_slots, num_iters, nullptr);
+    }
 }
