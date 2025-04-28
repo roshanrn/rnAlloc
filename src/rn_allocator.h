@@ -19,7 +19,8 @@ class RnBackend;
 class RnAllocator {
     public:
         RnAllocator() = default;
-        RnAllocator(size_t size, size_t backend_page_size = 2 * 1024 * 1024);
+        RnAllocator(size_t size, size_t backend_page_size = 2 * 1024 * 1024,
+                    bool setAffinity = false);
 
         void *rnAllocate(size_t size);
         void rnDelete(void *addr);
@@ -28,6 +29,10 @@ class RnAllocator {
         // Even though the map is meant to be perCPU as the name suggests
         // this implementation uses it perThread (my VM has only 1 vCPU :()
 
-        std::map<std::thread::id, std::unique_ptr<RnPool>> perCpuAllocator;
+        std::map<uint64_t, std::unique_ptr<RnPool>> perCpuAllocator;
         std::shared_ptr<RnBackend> rnBackend_;
+        // std::map<std::thread::id, int> threadMap_;
+        // std::map<std::thread::id, int> threadMap_;
+        int tCnt;
+        bool setAffinity_;
 };

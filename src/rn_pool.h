@@ -36,6 +36,12 @@ class RnBin {
               binSize_(size) {
             initialize_bin();
         };
+        RnBin(size_t size, std::shared_ptr<RnBackend> rnBackend, uint64_t tId)
+            : rnBackend_(rnBackend),
+              binSize_(size),
+              tId_(tId) {
+            initialize_bin();
+        };
         ~RnBin() {};
 
         void *binAllocate(size_t size);
@@ -49,6 +55,7 @@ class RnBin {
         // std::vector<RnPageNode> binList_;
         std::list<RnPageNode> binList_;
         std::shared_ptr<RnBackend> rnBackend_;
+        uint64_t tId_;
 };
 
 class RnPool {
@@ -58,7 +65,12 @@ class RnPool {
             : rnBackend_(rnBackend) {
             initialize_pool();
         };
-        ~RnPool() {};
+        RnPool(std::shared_ptr<RnBackend> rnBackend, uint64_t tId)
+            : rnBackend_(rnBackend),
+              tId_(tId) {
+            initialize_pool();
+        };
+        ~RnPool() { std::cout << "Destructor called" << std::endl; };
 
         void *poolAllocate(size_t size);
         void poolRelease(void *addr);
@@ -70,4 +82,5 @@ class RnPool {
         std::shared_ptr<RnBackend> rnBackend_;
         std::unordered_map<size_t, std::unique_ptr<RnBin>> bins_;
         size_t bin_size_class[NUM_BINS] = {16, 64, 128, 256};
+        uint64_t tId_;
 };

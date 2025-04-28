@@ -79,15 +79,16 @@ void *RnBin::binAllocate(size_t size) {
 
 void RnBin::binRelease(void *addr) {
     binList_.push_back({addr, binSize_});
-    // coalesceBinList();
+    coalesceBinList();
 }
 
 void RnPool::initialize_pool() {
-    DEBUG("Initializing Pool");
+    DEBUG("Initializing Pool for Thread " << tId_);
 
     for (size_t i = 0; i < NUM_BINS; i++) {
         size_t binSize = bin_size_class[i];
-        std::unique_ptr rnBin = std::make_unique<RnBin>(binSize, rnBackend_);
+        std::unique_ptr rnBin =
+            std::make_unique<RnBin>(binSize, rnBackend_, tId_);
         bins_[i] = std::move(rnBin);
     }
 }

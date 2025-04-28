@@ -5,6 +5,7 @@
 #include <cstring>
 #include <iostream>
 #include <random>
+#include <sys/resource.h>
 #include <sys/sysinfo.h>
 #include <thread>
 #include <vector>
@@ -15,6 +16,17 @@
 
 int ALLOC_SIZES[NUM_SIZES]{16, 64, 128, 256};
 
+void set_thread_affinity(std::thread &thread, int cpu_id) {
+    pthread_t handle = thread.native_handle();
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(cpu_id, &cpuset);
+    int result = pthread_setaffinity_np(handle, sizeof(cpu_set_t), &cpuset);
+    if (result != 0) {
+        std::cerr << "Error setting thread affinity" << std::endl;
+    }
+}
+
 void per_thread_bench(RnAllocator *rnAllocator, int tId, int num_slots,
                       int num_iters) {
     std::random_device rd;
@@ -23,6 +35,7 @@ void per_thread_bench(RnAllocator *rnAllocator, int tId, int num_slots,
     std::uniform_int_distribution<> opDistrib(0, NUM_OPS - 1);
     std::uniform_int_distribution<> sizeDistrib(0, NUM_SIZES - 1);
 
+    std::thread::id _tId = std::this_thread::get_id();
     std::vector<std::vector<void *>> allocated_memory(NUM_SIZES);
     for (int i = 0; i < NUM_SIZES; i++) {
         allocated_memory[i].resize(num_slots);
@@ -87,7 +100,7 @@ void per_thread_bench(RnAllocator *rnAllocator, int tId, int num_slots,
 }
 
 void run_bench(int num_threads, int num_slots, int num_iters,
-               RnAllocator *rnAllocator) {
+               RnAllocator *rnAllocator, bool setAffinity) {
 
     std::vector<std::thread> threads;
 
@@ -97,6 +110,10 @@ void run_bench(int num_threads, int num_slots, int num_iters,
     for (int i = 0; i < num_threads; ++i) {
         threads.emplace_back(per_thread_bench, rnAllocator, i, num_slots,
                              num_iters);
+        if (setAffinity) {
+            set_thread_affinity(threads[i],
+                                i % std::thread::hardware_concurrency());
+        }
     }
 
     // Wait for threads to finish
@@ -114,10 +131,20 @@ void run_bench(int num_threads, int num_slots, int num_iters,
 }
 
 int main(int argc, char **argv) {
-    bool runRnAlloc(false), runMalloc(false);
+    struct rlimit core_limits;
+    if (getrlimit(RLIMIT_CORE, &core_limits) == 0) {
+        core_limits.rlim_cur = core_limits.rlim_max = RLIM_INFINITY;
+        if (setrlimit(RLIMIT_CORE, &core_limits) != 0) {
+            std::cerr << "Failed to set core dump limit." << std::endl;
+        }
+    } else {
+        std::cerr << "Failed to get core dump limit." << std::endl;
+    }
+
+    bool runRnAlloc(false), runMalloc(false), setAffinity(false);
     int num_threads = NUM_THREADS, num_slots = 100000, num_iters = 500000;
     std::cout << " Number of arguments = " << argc << std::endl;
-    if (argc == 6) {
+    if (argc == 6 || argc == 7) {
         num_threads = std::atoi(argv[1]);
         num_slots = std::atoi(argv[2]);
         num_iters = std::atoi(argv[3]);
@@ -126,6 +153,9 @@ int main(int argc, char **argv) {
         }
         if (std::string(argv[5]) == "yes") {
             runMalloc = true;
+        }
+        if (argc == 7 && std::string(argv[6]) == "set-affinity") {
+            setAffinity = true;
         }
         std::cout << "Using NumThreads = " << num_threads
                   << " and NumSlots = " << num_slots
@@ -171,12 +201,13 @@ int main(int argc, char **argv) {
         }
 
         RnAllocator rnAllocator(total_mem_estimate,
-                                total_mem_estimate / (NUM_SIZES * num_threads));
+                                total_mem_estimate / (NUM_SIZES * num_threads),
+                                setAffinity);
         // RnAllocator rnAllocator(768 * 1024 * 1024, 10 * 1024 * 1024);
-        run_bench(num_threads, num_slots, num_iters, &rnAllocator);
+        run_bench(num_threads, num_slots, num_iters, &rnAllocator, setAffinity);
     }
 
     if (runMalloc) {
-        run_bench(num_threads, num_slots, num_iters, nullptr);
+        run_bench(num_threads, num_slots, num_iters, nullptr, setAffinity);
     }
 }
