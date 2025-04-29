@@ -95,10 +95,11 @@ RnBench supports the following currently:
 | Pattern: Seq. Rand., etc. | Y  |  N/A  |
 | Memory Allocators | RnAlloc - Y <br> glibc - Y <br> tcmalloc - Y <br> jemalloc - Y |  |
 
-Currently limitations of running rnBench: 
+#### Currently limitations of running rnBench: 
 1. Due to low system capabilties available (2 CPUs, 4 GB RAM - using a Digitial Ocean VM), RnBench hasn't been fully tested and verified for high threads + high slots + high iteraations configurations (>16 threads).
+2. When the ratio of iterations:slots is very high (>10k), the current implementation of RnBin (list without coalescing) leads to an overflow and potential corruptions. Threfore, till this is fixed it is recommended to keep iterations:slots < 1k. Note that iterations > 500k hasn't been tested very well.
 
-Archive of fixes:
+#### Archive of fixes:
 Fix 1. Using thread::id::get_id() for comparison is not recommended in c++ - requires a better method in rn_allocator.cpp. Fixed - setting thread name and using that now. 
 Fix 2. Remove hardcodings: Calculate the mem required based on slots and threads and compare against free memory before starting benchmark. Fixed, adding calculation - quite conservative estimation.
 
@@ -159,9 +160,11 @@ root@roshan-devel:/home/roshan/rnAlloc# valgrind --tool=memcheck --leak-check=ye
 
 
 ### Initial Evaluations
-Note: RnBench has not been testes with more than 500k iterations due to the above mentioned limitations.
+Note: RnBench has not been testes with more than 500k iterations due to the above mentioned limitations. <br>
+Note: Due to limitations mentioned above in RnBench and RnBin's implementation it is recommended not to use iterations:slots < 1K and iterations < 500K.
 
-Config used: Rand. sizes of 16, 64, 128, and 256 bytes | 100k available slots to allocate/free and 500k iterations. (Note that these results are with the code as on April 27. Fresh results to follow.)
+Config used: Rand. sizes of 16, 64, 128, and 256 bytes | 100k available slots to allocate/free and 500k iterations. (Note that these results are with the code as on April 27. Fresh results to follow.) <br>
+
 
 
 #### I. Allocations Only:
