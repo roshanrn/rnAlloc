@@ -28,6 +28,6 @@ class RnAllocator {
         // Even though the map is meant to be perCPU as the name suggests
         // this implementation uses it perThread (my VM has only 1 vCPU :()
 
-        std::map<std::thread::id, std::unique_ptr<RnPool>> perCpuAllocator;
+        std::map<std::string, std::unique_ptr<RnPool>> perCpuAllocator;
         std::shared_ptr<RnBackend> rnBackend_;
 };

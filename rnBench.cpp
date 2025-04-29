@@ -4,7 +4,9 @@
 #include <chrono>
 #include <cstring>
 #include <iostream>
+#include <pthread.h>
 #include <random>
+#include <string>
 #include <sys/sysinfo.h>
 #include <thread>
 #include <vector>
@@ -17,6 +19,9 @@ int ALLOC_SIZES[NUM_SIZES]{16, 64, 128, 256};
 
 void per_thread_bench(RnAllocator *rnAllocator, int tId, int num_slots,
                       int num_iters) {
+    std::string tName = "thread" + std::to_string(tId);
+    pthread_setname_np(pthread_self(), tName.c_str());
+
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> idxDistrib(0, num_slots - 1);
@@ -116,7 +121,7 @@ void run_bench(int num_threads, int num_slots, int num_iters,
 int main(int argc, char **argv) {
     bool runRnAlloc(false), runMalloc(false);
     int num_threads = NUM_THREADS, num_slots = 100000, num_iters = 500000;
-    std::cout << " Number of arguments = " << argc << std::endl;
+    // std::cout << " Number of arguments = " << argc << std::endl;
     if (argc == 6) {
         num_threads = std::atoi(argv[1]);
         num_slots = std::atoi(argv[2]);
@@ -154,14 +159,16 @@ int main(int argc, char **argv) {
             return 1;
         }
         size_t free_memory = ramInfo.freeram;
-        total_mem_estimate = num_threads * num_slots * sum_sizes;
-        //std::cout << "Free Memory = " << free_memory
-        //          << " Mem Estimate = " << total_mem_estimate << std::endl;
+        total_mem_estimate = num_threads * num_slots * sum_sizes *
+                             1.25; // over-provisioning for safety;
+        // std::cout << "Free Memory = " << free_memory
+        //           << " Mem Estimate = " << total_mem_estimate <<
+        //           std::endl;
         total_mem_estimate =
-            (total_mem_estimate +4096 * 4096 - 1) / (4096 * 4096);
+            (total_mem_estimate + 4096 * 4096 - 1) / (4096 * 4096);
         total_mem_estimate = total_mem_estimate * 4096 * 4096;
 
-        //std::cout << " Mem Estimate = " << total_mem_estimate << std::endl;
+        // std::cout << " Mem Estimate = " << total_mem_estimate << std::endl;
 
         if (free_memory / 2 < total_mem_estimate) {
             std::cout
@@ -170,8 +177,11 @@ int main(int argc, char **argv) {
             return 1;
         }
 
-        RnAllocator rnAllocator(total_mem_estimate,
-                                total_mem_estimate / (NUM_SIZES * num_threads));
+        size_t pageSizeEstimate =
+            total_mem_estimate / (NUM_SIZES * num_threads);
+        // pageSizeEstimate = (pageSizeEstimate + 4096 * 4096 - 1) / (4096 *
+        // 4096); pageSizeEstimate = pageSizeEstimate * 4096 * 4096;
+        RnAllocator rnAllocator(total_mem_estimate, pageSizeEstimate);
         // RnAllocator rnAllocator(768 * 1024 * 1024, 10 * 1024 * 1024);
         run_bench(num_threads, num_slots, num_iters, &rnAllocator);
     }
