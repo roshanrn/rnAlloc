@@ -12,7 +12,7 @@ Implement two (malloc and free) library calls along with a simple allocation pol
 6. Document all design choices, decisions, tradeoofs, evaluations, etc.
 
 ### Assumptions:
-a. In 2. above if the allocations cross the reserved capacity I decide to crash the prgram? I leave a hook in the both the code and design to extend this to request more mmap-ed memory.
+a. In 2. above if the allocations cross the reserved capacity I decide to crash the program? I leave a hook in the both the code and design to extend this to request more mmap-ed memory.
 
 ---
 
@@ -65,6 +65,7 @@ Note: Given my basic understanding of tcmalloc's design having used in a past pr
 5. Metadata Maintained:
    The metadata maintained by RnAlloc is simply a map where the key is the address range and value is the binSize. This way even if a CPU different from the one that allocated the memory tries to free it, the metadata map helps obtain the binsize and letes the CPU add that memory back to its corresponding RnBin. (To Do - use a tree for optimal performance and space utilization - maybe a radix tree?)
    > **_Note:_**  **To prove that cross-cpu free and subsequent allocation works fine there is a UT to demonstrate this. Check unit_tests/test_cross_cpu_free.cpp - It has explanation in comments and running it after compilation showcases that cross cpu free actually works fine.**
+   > **_Note:_**  **The lack of locks in the RnPools and the lack of per RnPool metadata means that if multiple threads trying to release the same memory will result in indefinite behaviour - only one RnPool might add it back, maybe multiple will, it is hard to define. So, with the design and implementation of RnPool, the user needs to take care of handling such scenarios. This limitation can be alleviated through some design element - need to think about it further.**
 
 ### Limitations/Deficiencies of the current minimal implementation:
 The following are currently not implemented / can be optimized in this minimal working implementation:
